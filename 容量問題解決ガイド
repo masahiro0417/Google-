@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Googleフォト容量問題 解決ガイド</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A user-centric, problem-solution flow. It starts by validating the user's issue (Hero), visually explaining the 'why' (How it Works), guiding them to a solution via an interactive filter (Decision Guide), providing detailed steps in an accordion (Solutions), and concluding with a summary. This structure is chosen over a linear report layout to empower users to quickly find relevant, actionable information based on their needs (cost, effort, time), making the content more engaging and effective. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Shared 15GB storage pool. Goal: Inform. Viz: HTML/CSS diagram with icons. Interaction: None. Justification: Visual metaphor is faster to understand than text.
+        - Report Info: Shared album upload mechanism. Goal: Clarify. Viz: HTML/CSS diagram showing storage deduction. Interaction: None. Justification: Visually pinpoints the core misunderstanding.
+        - Report Info: 5 solutions. Goal: Guide. Viz: Interactive filter buttons and solution cards. Interaction: JS-powered filtering to highlight relevant solutions. Justification: Turns passive reading into active decision-making, increasing user engagement and utility.
+        - Report Info: Google One plans/pricing. Goal: Compare. Viz: Chart.js Bar Chart. Interaction: Hover tooltips with details. Justification: A visual chart simplifies comparison of cost vs. benefit.
+        - Report Info: Detailed steps for solutions. Goal: Organize. Viz: HTML/CSS/JS accordion. Interaction: Click to expand/collapse. Justification: Prevents information overload and keeps the UI clean.
+        - Report Info: User's photo habits. Goal: Personalize advice. Viz: Text input and LLM-generated text output. Interaction: User input, button click to trigger LLM call. Justification: Provides tailored, actionable advice based on individual needs, enhancing user engagement and problem-solving.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8f7f4; color: #403d39; }
+        .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 50vh; }
+        .solution-card { transition: all 0.3s ease-in-out; }
+        .tag-highlight { background-color: #e0f2f1; color: #00796b; }
+        .btn-filter.active { background-color: #00796b; color: white; transform: scale(1.05); }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #00796b;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+
+        <header class="text-center mb-12 md:mb-16">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Googleフォト容量 解決ガイド</h1>
+            <p class="text-lg text-gray-600 max-w-3xl mx-auto">共有アルバムに写真を追加できない？その原因と、あなたの状況に合った解決策を簡単に見つけましょう。</p>
+        </header>
+
+        <main>
+            <section id="how-it-works" class="mb-16 md:mb-20">
+                <h2 class="text-2xl md:text-3xl font-bold text-center mb-8 text-gray-800">まず、仕組みを理解しよう</h2>
+                <div class="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-lg">
+                    <p class="text-center text-gray-700 mb-8">
+                        ユーザー様が直面している「共有アルバムへアップロードできない」問題は、Googleフォトの基本的な仕組みが原因です。このセクションでは、ストレージがどのように機能するのかを視覚的に解説し、問題の根本原因を明らかにします。
+                    </p>
+                    <div class="grid md:grid-cols-2 gap-8 items-center">
+                        <div class="border-r-0 md:border-r md:pr-8 border-gray-200">
+                            <h3 class="font-bold text-xl text-center mb-4 text-gray-700">1. ストレージは「共有地」</h3>
+                            <p class="text-sm text-center text-gray-600 mb-4">無料の15GBは、Googleの各サービスで共有されます。一つのサービスで使いすぎると、他も影響を受けます。</p>
+                            <div class="bg-gray-50 rounded-lg p-4 flex flex-col items-center shadow-inner">
+                                <div class="w-full bg-gray-200 rounded-full h-4 mb-3 overflow-hidden flex">
+                                    <div class="bg-blue-500 h-4" style="width: 45%"></div>
+                                    <div class="bg-red-500 h-4" style="width: 30%"></div>
+                                    <div class="bg-yellow-500 h-4" style="width: 25%"></div>
+                                </div>
+                                <span class="font-bold text-gray-700 mb-4">合計15GBのストレージ</span>
+                                <div class="flex justify-around w-full text-xs text-center">
+                                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>Google Drive</div>
+                                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-2"></span>Gmail</div>
+                                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-yellow-500 mr-2"></span>Google Photos</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-xl text-center mb-4 text-gray-700">2. 共有アルバムへの追加は「あなたの貢献」</h3>
+                            <p class="text-sm text-center text-gray-600 mb-4">共有アルバムに写真をアップロードすると、その容量は「あなた」のストレージから消費されます。</p>
+                            <div class="bg-gray-50 rounded-lg p-4 flex flex-col items-center shadow-inner">
+                                <div class="flex items-center justify-center space-x-4">
+                                    <div class="text-center">
+                                        <span class="text-4xl">👤</span>
+                                        <p class="text-sm font-semibold">あなた</p>
+                                        <div class="w-20 bg-gray-200 rounded-full h-2.5 mx-auto mt-1"><div class="bg-yellow-500 h-2.5 rounded-full" style="width: 95%"></div></div>
+                                    </div>
+                                    <div class="text-3xl font-light text-gray-400">→</div>
+                                    <div class="text-center">
+                                        <span class="text-4xl">🖼️</span>
+                                        <p class="text-sm font-semibold">共有アルバム</p>
+                                    </div>
+                                </div>
+                                <p class="mt-4 text-xs text-center text-gray-600">あなたのアップロードで、あなたのストレージが減ります。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="decision-guide" class="text-center mb-12 md:mb-16">
+                <h2 class="text-2xl md:text-3xl font-bold mb-4 text-gray-800">あなたに合った解決策を見つける</h2>
+                <p class="max-w-2xl mx-auto text-gray-600 mb-8">
+                    解決策は一つではありません。あなたの優先順位（コスト、手間、即時性）に合わせて、最適な方法を探しましょう。下のボタンをクリックすると、関連する解決策がハイライトされます。
+                </p>
+                <div id="filter-buttons" class="flex flex-wrap justify-center gap-2 md:gap-4">
+                    <button class="btn-filter px-4 py-2 rounded-full bg-white border border-gray-300 text-gray-700 transition" data-filter="all">すべて表示</button>
+                    <button class="btn-filter px-4 py-2 rounded-full bg-white border border-gray-300 text-gray-700 transition" data-filter="free">無料で解決</button>
+                    <button class="btn-filter px-4 py-2 rounded-full bg-white border border-gray-300 text-gray-700 transition" data-filter="easy">手間をかけず解決</button>
+                    <button class="btn-filter px-4 py-2 rounded-full bg-white border border-gray-300 text-gray-700 transition" data-filter="quick">すぐに解決</button>
+                    <button class="btn-filter px-4 py-2 rounded-full bg-white border border-gray-300 text-gray-700 transition" data-filter="long-term">長期的に解決</button>
+                </div>
+            </section>
+
+            <section id="solutions">
+                 <p class="text-center text-gray-700 mb-10 max-w-3xl mx-auto">
+                    ここには、Googleフォトの容量問題を解決するための5つの具体的な方法がリストされています。各方法のタイトルをクリックすると、詳細な手順や説明が表示されます。フィルタ機能を使って選択肢を絞り込み、自分に最適な方法を見つけてください。
+                </p>
+                <div id="solutions-accordion" class="space-y-4 max-w-4xl mx-auto">
+                </div>
+            </section>
+
+            <section id="ai-advisor" class="mt-16 md:mt-20 bg-white p-6 md:p-8 rounded-2xl shadow-lg max-w-4xl mx-auto">
+                <h2 class="text-2xl md:text-3xl font-bold text-center mb-8 text-gray-800">✨ AIがあなたに最適な解決策を提案 ✨</h2>
+                <p class="text-center text-gray-700 mb-6">
+                    あなたのGoogleフォトの利用状況や習慣を教えてください。AIが、あなたにぴったりのストレージ最適化のヒントを提供します。
+                    例えば、「スクリーンショットがたくさん溜まっている」「旅行の動画をよく撮る」「あまり写真を整理する時間がない」など、具体的に教えてください。
+                </p>
+                <div class="mb-6">
+                    <textarea id="user-habits-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700" rows="5" placeholder="あなたのGoogleフォトの利用状況や習慣を入力してください..."></textarea>
+                </div>
+                <div class="flex justify-center mb-6">
+                    <button id="get-ai-advice-btn" class="bg-purple-600 text-white px-6 py-3 rounded-full font-bold hover:bg-purple-700 transition flex items-center justify-center">
+                        <span id="button-text">AIにアドバイスをもらう ✨</span>
+                        <div id="loading-spinner" class="loading-spinner ml-2 hidden"></div>
+                    </button>
+                </div>
+                <div id="ai-advice-output" class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-800 hidden">
+                    <p class="font-semibold mb-2">AIからのアドバイス：</p>
+                    <div id="ai-response-content" class="prose prose-sm max-w-none"></div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-16 md:mt-20 pt-8 border-t border-gray-200">
+            <p class="text-gray-500">このインタラクティブガイドは、Googleフォトのストレージ問題を理解し、解決するための一助となることを目的としています。</p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const solutionsData = [
+                {
+                    id: 'solution1',
+                    title: '方法1：不要なデータを整理する',
+                    tags: ['free', 'quick'],
+                    content: `
+                        <p class="mb-4 text-gray-600">最も直接的な方法です。Googleフォト、Gmail、Googleドライブから不要なデータを削除して容量を確保します。</p>
+                        <ul class="space-y-2 list-disc list-inside text-gray-700">
+                            <li><strong>ストレージ管理ツールを活用：</strong>Googleフォトの「ストレージを管理」機能で、ぼやけた写真、サイズの大きい動画、スクリーンショットなどを簡単に見つけて削除できます。</li>
+                            <li><strong>ゴミ箱を空にする：</strong>削除したファイルはゴミ箱に移動し、30日間保持されます。すぐに容量を解放するには、ゴミ箱を空にする必要があります。</li>
+                            <li><strong>GmailとDriveもチェック：</strong>サイズの大きい添付ファイルや不要なファイルをGmailやGoogleドライブから削除することも、容量確保に繋がります。</li>
+                        </ul>
+                        <a href="https://photos.google.com/settings/storage" target="_blank" class="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">ストレージ管理ツールを開く</a>
+                    `
+                },
+                {
+                    id: 'solution2',
+                    title: '方法2：写真のバックアップ画質設定の変更',
+                    tags: ['free', 'long-term'],
+                    content: `
+                        <p class="mb-4 text-gray-600">今後の写真アップロードによるストレージ消費を抑える予防策です。「保存容量の節約画質」に設定すると、写真が圧縮されて保存されるため、容量を節約できます。</p>
+                        <p class="text-sm text-yellow-700 bg-yellow-50 p-3 rounded-lg"><strong>注意：</strong>この設定は、元の画質より若干低下する可能性があります。画質を最優先する写真には向きません。</p>
+                        <div class="mt-4">
+                            <strong>設定方法：</strong>
+                            <ol class="list-decimal list-inside text-gray-700 mt-2">
+                                <li>Googleフォトアプリを開き、プロフィール写真をタップ。</li>
+                                <li>「フォトの設定」→「バックアップ」→「アップロードサイズ」を選択。</li>
+                                <li>「保存容量の節約画質」を選択します。</li>
+                            </ol>
+                        </div>
+                    `
+                },
+                {
+                    id: 'solution3',
+                    title: '方法3：データを外部に移行する',
+                    tags: ['free', 'long-term'],
+                    content: `
+                        <p class="mb-4 text-gray-600">大量のデータをGoogleフォトから移動させて、大幅に容量を解放する方法です。有料プランを避けたい場合に有効です。</p>
+                        <div class="space-y-3">
+                            <p><strong>A. PC/外部ストレージに保存：</strong>Google Takeoutを使い、写真データを一括でダウンロードしてPCや外付けHDDに保存します。</p>
+                            <p><strong>B. 別のGoogleアカウントに移行：</strong>「パートナーとの共有」機能を使って、別のGoogleアカウントに写真を自動で共有・保存します。</p>
+                        </div>
+                         <a href="https://takeout.google.com/" target="_blank" class="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Google Takeoutを開く</a>
+                    `
+                },
+                {
+                    id: 'solution4',
+                    title: '方法4：Google Oneにアップグレードする',
+                    tags: ['easy', 'quick', 'long-term'],
+                    content: `
+                        <p class="mb-6 text-gray-600">最も手軽で確実な解決策です。有料プランのGoogle Oneに加入し、ストレージ容量を増やします。これにより容量不足が根本的に解決されます。</p>
+                        <div class="chart-container mb-6">
+                            <canvas id="googleOneChart"></canvas>
+                        </div>
+                        <p class="text-sm text-center text-gray-500 mb-4">月額・年額プランがあり、家族と共有できるなどの特典もあります。</p>
+                        <div class="text-center">
+                            <a href="https://one.google.com/about/plans" target="_blank" class="inline-block bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition">Google Oneプランを見る</a>
+                        </div>
+                    `
+                },
+                {
+                    id: 'solution5',
+                    title: '方法5：共有アルバムとサービスを管理する',
+                    tags: ['free', 'long-term'],
+                    content: `
+                        <p class="mb-4 text-gray-600">将来の容量不足を防ぐための、継続的な管理方法です。</p>
+                        <ul class="space-y-2 list-disc list-inside text-gray-700">
+                            <li><strong>古い共有アルバムの整理：</strong>使用しなくなった共有アルバムは定期的に解除し、管理をシンプルにします。</li>
+                            <li><strong>権限設定の見直し：</strong>共同編集者の権限を適切に設定し、意図しないアップロードを防ぎます。</li>
+                            <li><strong>定期的なストレージ確認：</strong>月に一度はGoogleアカウント全体のストレージ使用状況を確認する習慣をつけ、容量不足を未然に防ぎます。</li>
+                        </ul>
+                    `
+                }
+            ];
+
+            const accordionContainer = document.getElementById('solutions-accordion');
+            solutionsData.forEach(item => {
+                const tagsHtml = item.tags.map(tag => {
+                    let text = '';
+                    switch(tag) {
+                        case 'free': text = '無料'; break;
+                        case 'easy': text = '手軽'; break;
+                        case 'quick': text = '即時'; break;
+                        case 'long-term': text = '長期的'; break;
+                    }
+                    return `<span class="tag-highlight text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">${text}</span>`;
+                }).join('');
+
+                const element = document.createElement('div');
+                element.className = 'solution-card bg-white rounded-xl shadow-md overflow-hidden';
+                element.dataset.tags = item.tags.join(',');
+                element.innerHTML = `
+                    <button class="w-full text-left p-5 md:p-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500" data-accordion-target="${item.id}">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-bold text-gray-800">${item.title}</h3>
+                            <span class="accordion-icon transform transition-transform text-2xl font-thin text-gray-500">+</span>
+                        </div>
+                        <div class="mt-2">${tagsHtml}</div>
+                    </button>
+                    <div id="${item.id}" class="accordion-content hidden px-5 md:px-6 pb-6">
+                        ${item.content}
+                    </div>
+                `;
+                accordionContainer.appendChild(element);
+            });
+
+            const filterButtons = document.querySelectorAll('.btn-filter');
+            const solutionCards = document.querySelectorAll('.solution-card');
+
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const filter = button.dataset.filter;
+                    
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    solutionCards.forEach(card => {
+                        const tags = card.dataset.tags.split(',');
+                        if (filter === 'all' || tags.includes(filter)) {
+                            card.style.opacity = '1';
+                            card.style.transform = 'scale(1)';
+                            card.style.pointerEvents = 'auto';
+                        } else {
+                            card.style.opacity = '0.5';
+                            card.style.transform = 'scale(0.98)';
+                            card.style.pointerEvents = 'none';
+                        }
+                    });
+                });
+            });
+            document.querySelector('.btn-filter[data-filter="all"]').classList.add('active');
+
+
+            const accordionButtons = document.querySelectorAll('[data-accordion-target]');
+            accordionButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetId = button.dataset.accordionTarget;
+                    const targetContent = document.getElementById(targetId);
+                    const icon = button.querySelector('.accordion-icon');
+                    const isHidden = targetContent.classList.contains('hidden');
+
+                    if (isHidden) {
+                        targetContent.classList.remove('hidden');
+                        icon.textContent = '−';
+                        if (targetId === 'solution4') {
+                            renderGoogleOneChart();
+                        }
+                    } else {
+                        targetContent.classList.add('hidden');
+                        icon.textContent = '+';
+                    }
+                });
+            });
+
+            let chartInstance = null;
+            function renderGoogleOneChart() {
+                const ctx = document.getElementById('googleOneChart')?.getContext('2d');
+                if (!ctx) return;
+                if(chartInstance) {
+                    chartInstance.destroy();
+                }
+                const chartData = {
+                    labels: ['100 GB', '200 GB', '2 TB'],
+                    datasets: [{
+                        label: '年間料金 (円)',
+                        data: [2500, 3800, 13000],
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(75, 192, 192, 0.6)',
+                            'rgba(153, 102, 255, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                };
+
+                const chartOptions = {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) { return value.toLocaleString() + '円'; }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: 'Google One 主なプランの年間料金比較'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ' 年間 ' + context.parsed.y.toLocaleString() + '円';
+                                }
+                            }
+                        }
+                    }
+                };
+
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: chartData,
+                    options: chartOptions
+                });
+            }
+
+            const userHabitsInput = document.getElementById('user-habits-input');
+            const getAiAdviceBtn = document.getElementById('get-ai-advice-btn');
+            const aiAdviceOutput = document.getElementById('ai-advice-output');
+            const aiResponseContent = document.getElementById('ai-response-content');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const buttonText = document.getElementById('button-text');
+
+            getAiAdviceBtn.addEventListener('click', async () => {
+                const userPrompt = userHabitsInput.value.trim();
+                if (!userPrompt) {
+                    aiResponseContent.innerHTML = '<p class="text-red-600">利用状況を入力してください。</p>';
+                    aiAdviceOutput.classList.remove('hidden');
+                    return;
+                }
+
+                buttonText.textContent = 'AIが考え中...';
+                loadingSpinner.classList.remove('hidden');
+                getAiAdviceBtn.disabled = true;
+                aiAdviceOutput.classList.add('hidden');
+                aiResponseContent.innerHTML = '';
+
+                try {
+                    let chatHistory = [];
+                    const fullPrompt = `あなたはGoogleフォトのストレージ専門家です。ユーザーがGoogleフォトの利用状況を説明しますので、以下の5つの解決策の中から最適なものを1つ以上選び、その理由と具体的なアドバイスを簡潔に提供してください。ユーザーの状況に合わせた、親身で役立つアドバイスをお願いします。
+
+解決策リスト：
+1. 不要なデータを整理する
+2. 写真のバックアップ画質設定の変更
+3. データを外部に移行する
+4. Google Oneにアップグレードする
+5. 共有アルバムとサービスを管理する
+
+ユーザーの利用状況：${userPrompt}`;
+
+                    chatHistory.push({ role: "user", parts: [{ text: fullPrompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        aiResponseContent.innerHTML = text.replace(/\n/g, '<br>');
+                    } else {
+                        aiResponseContent.innerHTML = '<p class="text-red-600">AIからのアドバイスを取得できませんでした。もう一度お試しください。</p>';
+                    }
+                } catch (error) {
+                    console.error('Error calling Gemini API:', error);
+                    aiResponseContent.innerHTML = '<p class="text-red-600">エラーが発生しました。ネットワーク接続を確認し、もう一度お試しください。</p>';
+                } finally {
+                    aiAdviceOutput.classList.remove('hidden');
+                    buttonText.textContent = 'AIにアドバイスをもらう ✨';
+                    loadingSpinner.classList.add('hidden');
+                    getAiAdviceBtn.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
